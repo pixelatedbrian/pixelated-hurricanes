@@ -28,13 +28,15 @@ class DataStorm(object):
     There is also an accumulating heatmap which shows storm activity over time.
     '''
 
-    def __init__(self, start_year=1915, end_year=2016, height=1200, width=1920,
+    def __init__(self, start_year=1915, end_year=2016, height=1080, width=1920,
                 smoothing=9, vid_fps=24):
         '''
         Returns a DataStorm object, loads in the initial data
         '''
         self.start_year = start_year
         self.end_year = end_year
+
+        self.total_frames = 0
 
         # video/image dimensions
         self.height = height
@@ -44,7 +46,7 @@ class DataStorm(object):
         self.smoothing=smoothing
 
         # how many fps in the end video?
-        self.vid_fps=24
+        self.vid_fps=vid_fps
 
         # load in a list of 'contrails' so that making a video is faster
         # as the trails won't have to be reloaded constantly
@@ -75,10 +77,18 @@ class DataStorm(object):
         storms = []
         # load in all requested years
         for idx in range(y1, y2, 1):
-            _filename = "xplot_{}.png".format(idx)
+            # _filename = "xplot_{}.png".format(idx)
+            #
+            # # load track file
+            # storm_tracks = imread("../imgs/xplots4/{}".format(_filename))
+
+            # use fat tracks
+            _filename = "xplot_{}_1.png".format(idx)
 
             # load track file
-            storm_tracks = imread("../imgs/xplots4/{}".format(_filename))
+            storm_tracks = imread("../imgs/fplots/{}".format(_filename))
+
+            print "Loaded: {}".format(_filename)
 
             # get the RGBA buffer:
             new_buffer = np.frombuffer(storm_tracks, np.uint8)
@@ -95,28 +105,6 @@ class DataStorm(object):
             # del new_buffer
 
         return storms
-
-    def easy_buffer(self, _filename, verbose=False):
-        '''
-        load file with filename, turn into np buffer
-
-        returns:
-        new np buffer
-        '''
-        # load track file
-        storm_tracks = imread("../imgs/xplots4/{}".format(_filename))
-
-        new_buffer = np.frombuffer(storm_tracks, np.uint8)
-
-        temp_buffer = new_buffer.astype(np.int16).reshape(self.height, self.width, 4) #int16 so we dont overflow
-
-        if verbose == True:
-            print "new_buffer shape:", temp_buffer.shape
-            print "max value in current heat buffer:", temp_buffer[..., 1].max()
-
-        temp_buffer[temp_buffer[:, :, -1] == 0] = 0
-
-        return temp_buffer
 
     def fast_easy_buffer(self, year):
         '''
@@ -149,7 +137,7 @@ class DataStorm(object):
         fig, ax to use for the diagram
         '''
         # establish the figure
-        fig = plt.figure(figsize=(19.2, 12.0), dpi=100)
+        fig = plt.figure(figsize=(19.2, 10.80), dpi=100)
 
         ax = fig.add_subplot(111)
         ax.set_facecolor("#000000")
@@ -169,6 +157,48 @@ class DataStorm(object):
 
         return fig, ax, main_buffer
 
+    def draw_moving_avg_video(self):
+        ################################
+        ### Try to write to video?!  ###
+        ################################
+
+        # Thanks to Patrick Mende for providing the following link to enable
+        # making the video files within python
+        # https://stackoverflow.com/questions/4092927/generating-movie-from-python-without-saving-individual-frames-to-files/29525514#29525514
+
+        # # Open an ffmpeg process
+        # outf = '../imgs/test/final_hr/heat_movie.mp4'
+        # cmdstring = ('ffmpeg',
+        #     '-y', '-r', str(self.vid_fps), # overwrite, 30fps
+        #     '-s', '{:d}x{:d}'.format(1920, 1200), # size of image string
+        #     '-pix_fmt', 'argb', # format
+        #     '-f', 'rawvideo',  '-i', '-', # tell ffmpeg to expect raw video from the pipe
+        #     '-vcodec', 'libx264', '-crf', '25', outf) # output encoding
+        #
+        # # what we've been using when doing it manually
+        # # ffmpeg -r 24 -f image2 -s 1920x1080 -i xplot_2012_%2d.png -vcodec libx264 -crf 25 -pix_fmt yuv420p test1.mp4
+        # proc = subprocess.Popen(cmdstring, stdin=subprocess.PIPE)
+
+        for year2 in range(self.start_year, self.end_year, 1):
+
+            _filename = "new_mov_avg_{}".format(year2)
+            _e_buffer = self.draw_map(y1=year2-25, y2=year2, gam1=3.375, gam2=4.0,
+                                        last_alpha=1.0, color_map=5, file_name=_filename)
+            # _e_buffer = self.draw_map(1.5, 4.0, y1=1915, y2=year2, last_alpha=frame_alpha, color_map=0)
+
+        #     # write to pipe
+        #     proc.stdin.write(_e_buffer)
+        #
+        #
+        # for idx in range(self.vid_fps):
+        #     # write the last frame to the pipe fps number of times
+        #     # to create 1s of image hold time before repeating
+        #     # write to pipe
+        #     proc.stdin.write(_e_buffer)
+        #
+        # # try to write the video
+        # proc.communicate()
+
     def draw_video(self):
         ################################
         ### Try to write to video?!  ###
@@ -179,10 +209,10 @@ class DataStorm(object):
         # https://stackoverflow.com/questions/4092927/generating-movie-from-python-without-saving-individual-frames-to-files/29525514#29525514
 
         # Open an ffmpeg process
-        outf = '../imgs/test/final_hr/heat_movie.mp4'
+        outf = '../imgs/test/final_hr/heat_movie2.mp4'
         cmdstring = ('ffmpeg',
             '-y', '-r', str(self.vid_fps), # overwrite, 30fps
-            '-s', '{:d}x{:d}'.format(1920, 1200), # size of image string
+            '-s', '{:d}x{:d}'.format(1920, 1080), # size of image string
             '-pix_fmt', 'argb', # format
             '-f', 'rawvideo',  '-i', '-', # tell ffmpeg to expect raw video from the pipe
             '-vcodec', 'libx264', '-crf', '25', outf) # output encoding
@@ -202,12 +232,19 @@ class DataStorm(object):
                 frame_alpha = _toc / (smoothing * 1.0)
 
                 _filename = "test_{}".format(year2)
-                _e_buffer = self.draw_map(y1=1915, y2=year2, gam1=3.375, gam2=4.0,
+                _e_buffer = self.draw_map(y1=self.start_year, y2=year2, gam1=3.375, gam2=4.0,
                                             last_alpha=frame_alpha, color_map=5)
                 # _e_buffer = self.draw_map(1.5, 4.0, y1=1915, y2=year2, last_alpha=frame_alpha, color_map=0)
 
                 # write to pipe
                 proc.stdin.write(_e_buffer)
+
+
+        for idx in range(self.vid_fps):
+            # write the last frame to the pipe fps number of times
+            # to create 1s of image hold time before repeating
+            # write to pipe
+            proc.stdin.write(_e_buffer)
 
         # try to write the video
         proc.communicate()
@@ -278,10 +315,10 @@ class DataStorm(object):
             temp_buffer = self.fast_easy_buffer(y1 + x)
             # temp_buffer = self.easy_buffer(_filename)
 
-            print "last_alpha: {},x: {}, y1: {} y2: {}".format(last_alpha, x, y1, y2)
+            # print "last_alpha: {},x: {}, y1: {} y2: {}".format(last_alpha, x, y1, y2)
 
             if last_alpha < 1.0 and x == (y2-y1):
-                print "smoothing last frame in set for year: {}".format(y1 + x)
+                # print "smoothing last frame in set for year: {}".format(y1 + x)
 
                 # if smoothing is turned on then try to fade the new data being
                 # added into the frame depending on how far into the smoothing
@@ -295,15 +332,15 @@ class DataStorm(object):
             # load the transparent background map and add it's values to the buffer
             _heatmap += temp_buffer
 
-        print "max heat coming out of layer processing:", _heatmap[..., 1].max()
+        print "25 years ending in [{}] Max Heat: {:0>4d}".format(y2, int(_heatmap[..., 1].max()))
 
         # currently the buffer is RGBA but since it's grey we only need one channel
         _buff = _heatmap[...,1]
         # max heat is 1500 so it seems like data is being loaded ok
 
-        print "buff shape", _buff.shape
+        # print "buff shape", _buff.shape
         # max one pixel relatively hot so it normalizes the image?
-        _buff[1199, 1919] = 255
+        _buff[1079, 1919] = 1340
 
 
         # prepare to draw the new buffer
@@ -351,18 +388,24 @@ class DataStorm(object):
         ax.imshow(first.astype(np.uint8), extent=[-110, -30, 10, 50], aspect='auto', alpha=1.0)
         # write out file info so we can see how a map was made later w/ grid search
         desc = "{}-{}".format(y1, y2)
-        ax.annotate(desc, xy=(-109, 48), size=40, color='#A0A0A0')
+        ax.annotate(desc, xy=(-109, 48), size=40, color='#AAAAAA')
+        ax.annotate("@pixelated_brian", xy=(-109, 12), size=20, color="#BBBBBB")
 
         # plt.close("all")
         if file_name != None:
-            fig.savefig("../imgs/test/final_hr/{}".format(file_name), pad_inches=0, transparent=True)
-            print "Wrote image: {}\r".format(file_name)
+            fig.savefig("../imgs/test/final_hr/25mov_avg_{:0>3d}.png".format(self.total_frames), pad_inches=0, transparent=True)
+            # print "Wrote image: {}\r".format(file_name)
+            self.total_frames += 1
+
             plt.close("all")
+        else:
+            fig.canvas.draw()
+            # extract the image as an ARGB string
+            _exit_buffer = fig.canvas.tostring_argb()
 
-        fig.canvas.draw()
-        # extract the image as an ARGB string
-        _exit_buffer = fig.canvas.tostring_argb()
+            self.total_frames += 1
+            print "Finished frame: {:0>3d}\r".format(self.total_frames),
 
-        # keep memory from getting exhausted if there's a ton of draws
-        plt.close("all")
-        return _exit_buffer
+            # keep memory from getting exhausted if there's a ton of draws
+            plt.close("all")
+            return _exit_buffer

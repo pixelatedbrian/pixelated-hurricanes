@@ -19,10 +19,13 @@ import subprocess
 from DataStorm import DataStorm
 
 def main():
-    storm = DataStorm(1915, 1926, vid_fps=60, smoothing=60) # not inclusive of the second date!!!
+    storm = DataStorm(1915, 2016, vid_fps=60, smoothing=6) # not inclusive of the second date!!!
 
 
-    storm.draw_video()
+    # storm.draw_video()
+
+    storm.draw_moving_avg_video()
+
 
 if __name__ == "__main__":
     main()

@@ -18,7 +18,7 @@ def main():
 
     _extent=[long_range[0], long_range[1], lat_range[0], lat_range[1]]
 
-    _start = 1900
+    _start = 1860
     _end = 2016
 
     years = get_data_as_yearlist(_start, _end)
@@ -28,7 +28,10 @@ def main():
     for year in years:
 
         # make 5 versions of thickness so storm-tracks shrink to minimum over time
-        for thickness in range(1, 11, 2):
+
+        # fat trails range is 1 instead of 11 since we only need one trail
+        # per year
+        for thickness in range(1, 2, 2):
             fig, ax = make_historical_diagram(long_range, lat_range)
 
             # additive code from:
@@ -45,7 +48,7 @@ def main():
             storms = get_storms_from_year(year)
 
             num_storms = len(storms)
-            print "Storms:", num_storms
+            # print "Storms:", num_storms
 
             total_layers = 0
 
@@ -71,22 +74,22 @@ def main():
             print "first max", _max
 
 
-            first[:,:,0] = np.sqrt(first[:,:,0]) * (255.0 / np.sqrt(_max))
-            first[:,:,1] = np.sqrt(first[:,:,1]) * (255.0 / np.sqrt(_max))
-            first[:,:,2] = np.sqrt(first[:,:,2]) * (255.0 / np.sqrt(_max))
+            # first[:,:,0] = np.sqrt(first[:,:,0]) * (255.0 / np.sqrt(_max))
+            # first[:,:,1] = np.sqrt(first[:,:,1]) * (255.0 / np.sqrt(_max))
+            # first[:,:,2] = np.sqrt(first[:,:,2]) * (255.0 / np.sqrt(_max))
 
             # divide by 25 so that no particular year should max out the
             # pixel brightness, in that manner all years are relative
             #
             # leave it to the rendering of the heatmap to make the brightness
             # relative to the strength overall
-            # first[:,:,0] = first[:,:,0] / 25.0
-            # first[:,:,1] = first[:,:,1] / 25.0
-            # first[:,:,2] = first[:,:,2] / 25.0
+            first[...,0] = first[...,0] / 3.0
+            first[...,1] = first[...,1] / 3.0
+            first[...,2] = first[...,2] / 3.0
 
-            print "total_layers:", total_layers
+            # "total_layers:", total_layers
 
-            print "max first:", first[:,:,0].max()
+            # print "max first:", first[...,0].max()
 
             # first = first / (total_layers * 1.0)**0.5
 
@@ -94,20 +97,16 @@ def main():
                                             # wonder if some kind of exp transform
                                             # might enable hdr-like effect
 
-            # if the rgb part is 0 then it's black, make it transparent then
-            for a in range(first.shape[0]):
-                for b in range(first.shape[1]):
-                    if first[a][b][0] == 0 and first[a][b][1] == 0 and first[a][b][2] == 0:
-                        first[a][b][3] = 0
-
-
-
+            # literally more than 10x faster than nested for loops
+            first[((first[:,:,0] == 0) & (first[:,:,1] == 0) & (first[:,:,2] == 0))] = 0
 
             ax.clear()
             plt.axis("off")
             # ax.imshow(map_image, extent=_extent)
             ax.imshow(first.astype(np.uint8), aspect='auto', alpha=1.0, extent=_extent)
-            fig.savefig("../imgs/xplots4/{}".format(_filename), pad_inches=0, transparent=True)
+
+            # normal trails to xplots, fat trails to fplots
+            fig.savefig("../imgs/fplots/{}".format(_filename), pad_inches=0, transparent=True)
             ax.clear()
 
             del first
@@ -122,7 +121,7 @@ def make_diagram(_year):
     returns ax which is the figure axis that the current hurricane track will be added upon
     '''
         # establish the figure
-    figure, axis = plt.subplots(figsize=(19.2,12.00), dpi=100)
+    figure, axis = plt.subplots(figsize=(19.2,10.8), dpi=100)
 
     data = np.linspace(165.0, 0, 10000).reshape(100,100)
 #     data = np.clip(randn(250, 250), -1, 1)
@@ -156,7 +155,7 @@ def make_historical_diagram(long_range, lat_range):
     returns ax which is the figure axis that the current hurricane track will be added upon
     '''
     # establish the figure
-    figure = plt.figure(figsize=(19.2, 12.0), dpi=100)
+    figure = plt.figure(figsize=(19.2, 10.80), dpi=100)
 
     axis = figure.add_subplot(111)
     axis.set_facecolor("#000000")
@@ -265,7 +264,10 @@ def transform_storm(storm, historical=False, thickness=0):
             if thickness == 0:
                 _width = (storm.loc[:, "saffir_simpson_cat"] + 2)**1.3 * 25
             else:
-                _width = (storm.loc[:, "saffir_simpson_cat"] + 2)**1.3 * 100 * (1/(1.0* thickness))
+                # _width = (storm.loc[:, "saffir_simpson_cat"] + 2)**1.5 * 100 * (1/(1.0* thickness))
+
+                # fat trails for heatmap?
+                _width = (storm.loc[:, "saffir_simpson_cat"] + 2)**2.7 * 50 * (1/(1.0* thickness))
 
         _colors = storm.loc[:,"Wind(WMO)"].apply(lambda x: x / 165.0)
 

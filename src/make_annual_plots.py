@@ -12,7 +12,8 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.misc import imread
 
 def main():
-    map_image = imread("../data/grey_blue_na_2.png")
+    map_image = imread("../data/final_ultra_map_reg.png")
+    map_key = imread("../data/final_ultra_map_key_reg.png")
 
     START_OF_RUN = True
 
@@ -20,7 +21,7 @@ def main():
     _end = 1941
 
     lat_range = (10, 50)
-    long_range = (-120, -30)
+    long_range = (-110, -30)
 
     _extent=[long_range[0], long_range[1], lat_range[0], lat_range[1]]
 
@@ -115,14 +116,17 @@ def main():
             # had a problem where the swarm was blocking the map even where
             # there were no trails. This makes every black pixel transparent
             # so the map isn't blocked unless it needs to be
-            for a in range(first.shape[0]):
-                for b in range(first.shape[1]):
-                    if first[a][b][0] <= 3 and first[a][b][1] <= 3 and first[a][b][2] <= 3:
-                        first[a][b][3] = 0
+            # for a in range(first.shape[0]):
+            #     for b in range(first.shape[1]):
+            #         if first[a][b][0] <= 3 and first[a][b][1] <= 3 and first[a][b][2] <= 3:
+            #             first[a][b][3] = 0
+
+            # and black parts transparent (if they're not already)
+            first[((first[:,:,0] == 0) & (first[:,:,1] == 0) & (first[:,:,2] == 0))] = 0
 
             # build up a map that also has the previous nine years of storms on it
             # nine so the total showing is ten
-            map_image = imread("../data/grey_blue_na_2.png")
+            # map_image = imread("../data/grey_blue_na_2.png")
 
             layer_count = 0
 
@@ -138,7 +142,7 @@ def main():
 
                     # current year - _y = old_yr
                     old_y = _year - _y
-                    _path = "../imgs/xplots3/xplot_{}_{}.png".format(old_y, _y)
+                    _path = "../imgs/xplots/xplot_{}_{}.png".format(old_y, _y)
 
                     # load old swarm
                     old_swarm = imread(_path)
@@ -184,10 +188,13 @@ def main():
             # had a problem where the swarm was blocking the map even where
             # there were no trails. This makes every black pixel transparent
             # so the map isn't blocked unless it needs to be
-            for a in range(second.shape[0]):
-                for b in range(second.shape[1]):
-                    if second[a][b][0] == 0 and second[a][b][1] == 0 and second[a][b][2] == 0:
-                        second[a][b][3] = 0
+            # for a in range(second.shape[0]):
+            #     for b in range(second.shape[1]):
+            #         if second[a][b][0] == 0 and second[a][b][1] == 0 and second[a][b][2] == 0:
+            #             second[a][b][3] = 0
+
+            # and black parts transparent (if they're not already)
+            second[((second[:,:,0] == 0) & (second[:,:,1] == 0) & (second[:,:,2] == 0))] = 0
 
             ###########################################################
             ## Try manually adding in the map at the end and reclip ###
@@ -229,7 +236,10 @@ def main():
             # cbar = figure.colorbar(histo_image, ticks=[157, 130, 111, 96, 74, 39, 0], cax=cax)
             # cbar.ax.set_yticklabels(['5^', '4^', '3^', '2^', '1^', 'T.S.^', 'T.D.^'])  # vertically oriented colorbar
 
-            ax.annotate(str(_year), xy=(-119, 47), size=40, color='#707070')
+            ax.imshow(map_key, aspect="auto", alpha=1.0, extent=_extent)
+
+            ax.annotate(str(_year), xy=(-119, 47), size=40, color='#AAAAAA')
+            ax.annotate("@pixelated_brian", xy=(-104, 12), size=15, color="#999999")
             fig.savefig("../imgs/swarm/{}".format(_filename), pad_inches=0, transparent=True)
             ax.clear()
 
@@ -248,7 +258,7 @@ def make_diagram(_year, long_range, lat_range):
     returns ax which is the figure axis that the current hurricane track will be added upon
     '''
         # establish the figure
-    figure, axis = plt.subplots(figsize=(19.2,12.00), dpi=100)
+    figure, axis = plt.subplots(figsize=(19.2,10.80), dpi=100)
 
     data = np.linspace(165.0, 0, 100).reshape(10,10)
 #     data = np.clip(randn(250, 250), -1, 1)
@@ -282,7 +292,7 @@ def make_historical_diagram(long_range, lat_range):
     returns ax which is the figure axis that the current hurricane track will be added upon
     '''
     # establish the figure
-    figure = plt.figure(figsize=(19.2, 12.0), dpi=100)
+    figure = plt.figure(figsize=(19.2, 10.80), dpi=100)
 
     axis = figure.add_subplot(111)
     axis.set_facecolor("#000000")
