@@ -14,6 +14,11 @@ from scipy.misc import imread
 # for writing directly to video
 import subprocess
 
+# ffmpeg -r 30 -f image2 -s 1920x1080 -i xplot_1916_%2d.png -vcodec libx264 -crf 25 -pix_fmt yuv420p 1916.mp4
+# http://hamelot.io/visualization/using-ffmpeg-to-convert-a-set-of-images-into-a-video/
+# https://trac.ffmpeg.org/wiki/Concatenate
+
+
 def main():
     map_image = imread("../data/final_ultra_map_reg.png")
     map_key = imread("../data/final_ultra_map_key_reg.png")
