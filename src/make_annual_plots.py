@@ -11,17 +11,37 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.misc import imread
 
+# for writing directly to video
+import subprocess
+
 def main():
     map_image = imread("../data/final_ultra_map_reg.png")
     map_key = imread("../data/final_ultra_map_key_reg.png")
 
-    START_OF_RUN = True
+    START_OF_RUN = False
 
-    _start = 1916
-    _end = 1941
+    _start = 1915
+    _end = 2016
 
     lat_range = (10, 50)
     long_range = (-110, -30)
+
+    vid_fps = 30
+    # how much of a second should the video pause before going to the next year
+    lag_time = 0.33
+
+    # Open an ffmpeg process
+    outf = '../imgs/test/final_hr/swarm_w_lag2.mp4'
+    cmdstring = ('ffmpeg',
+        '-y', '-r', str(vid_fps), # overwrite, 30fps
+        '-s', '{:d}x{:d}'.format(1920, 1080), # size of image string
+        '-pix_fmt', 'argb', # format
+        '-f', 'rawvideo',  '-i', '-', # tell ffmpeg to expect raw video from the pipe
+        '-vcodec', 'libx264', '-crf', '25', outf) # output encoding
+
+    # what we've been using when doing it manually
+    # ffmpeg -r 24 -f image2 -s 1920x1080 -i xplot_2012_%2d.png -vcodec libx264 -crf 25 -pix_fmt yuv420p test1.mp4
+    proc = subprocess.Popen(cmdstring, stdin=subprocess.PIPE)
 
     _extent=[long_range[0], long_range[1], lat_range[0], lat_range[1]]
 
@@ -38,7 +58,8 @@ def main():
     # make a temp list to hold the storm dataframes from a single year
     # for _idx, year in enumerate(years):
     for _idx in range(base_range, num_years):
-        year = years[_idx]
+        print "idx:", _idx, " len years:", len(years)
+        year = years[_idx-base_range]
         storms = get_storms_from_year(year)
 
         num_storms = len(storms)
@@ -47,17 +68,20 @@ def main():
         # figure out what the year is
         _year = year.loc[:, "Season"].unique()[0]
 
-        storm_max_track = np.array([len(storm) for storm in storms]).max()
+        storm_max_track_length = np.array([len(storm) for storm in storms]).max()
+
+        # currently frames per year is based off of 1 year per second
+        _frames_per_year = int(vid_fps * (1.0 - lag_time))
 
         # each tick is 24 hours so go through until all ticks have been
         # accounted for
-        for _x in range(1, storm_max_track+1):
+        for _x in range(1, _frames_per_year+1):
             total_layers = 0
             #
             # if _x > 1:
             #     break
 
-            _slice = _x
+            _slice = _x / (_frames_per_year * 1.0)
 
             _filename = "xplot_{}_{:0>2}.png".format(_year, _x)
 
@@ -85,11 +109,14 @@ def main():
                 # if total_layers > 1:
                 #     break
 
+                # the longest storm in in the year is known by storm_max_track
+                scaler = storm_max_track_length / (len(storm) * 1.0)
+
                 ax.clear()  # maybe clear erases some of the axis settings, not just the canvas?
                 ax.set_xlim(long_range[0], long_range[1])
                 ax.set_ylim(lat_range[0], lat_range[1])
                 ax.patch.set_facecolor('#000000')
-                plot_current_storm(fig, ax, storm, _slice)
+                plot_current_storm(fig, ax, storm, _slice, scaler)
                 fig.canvas.draw()
                 img = np.frombuffer(fig.canvas.buffer_rgba(), np.uint8).astype(np.int16).reshape(h, w, -1)
                 img[img[:, :, -1] == 0] = 0
@@ -163,6 +190,8 @@ def main():
                     img[img[:, :, -1] == 0] = 0
                     second += img # Add these particles to the main layer
 
+            # try to clean up the ghost trails some so it's not overpowering
+            # the current year's storms
             if _idx > 0:
                 # attempt to average out values some so that there's not a ton
                 # of bright stuff that got clipped
@@ -238,9 +267,16 @@ def main():
 
             ax.imshow(map_key, aspect="auto", alpha=1.0, extent=_extent)
 
-            ax.annotate(str(_year), xy=(-119, 47), size=40, color='#AAAAAA')
+            ax.annotate(str(_year), xy=(-109, 47), size=40, color='#AAAAAA')
             ax.annotate("@pixelated_brian", xy=(-104, 12), size=15, color="#999999")
-            fig.savefig("../imgs/swarm/{}".format(_filename), pad_inches=0, transparent=True)
+            # fig.savefig("../imgs/swarm/{}".format(_filename), pad_inches=0, transparent=True)
+
+            fig.canvas.draw()
+
+            _exit_buffer = fig.canvas.tostring_argb()
+            # write to pipe
+            proc.stdin.write(_exit_buffer)
+
             ax.clear()
 
             plt.close("all")
@@ -248,6 +284,16 @@ def main():
             # delete the buffers or stuff will accumulate (fun bug)
             del first
             del second
+
+        # try to add some pause time between years, how about 0.15 of a second
+        for _ in range(int(vid_fps * 0.15)):
+            proc.stdin.write(_exit_buffer)
+
+    for idx in range(vid_fps * 3):
+        proc.stdin.write(_exit_buffer)
+
+    # try to write the video
+    proc.communicate()
 
 def make_diagram(_year, long_range, lat_range):
     '''
@@ -339,7 +385,7 @@ def plot_historical_storm(fig, ax, old_storm):
     else:
         pass
 
-def plot_current_storm(fig, ax, storm, _slice=0):
+def plot_current_storm(fig, ax, storm, _slice=0, scaling=1.0):
     '''
     returns axis that has had a historical storm scatter plot applied
 
@@ -347,7 +393,7 @@ def plot_current_storm(fig, ax, storm, _slice=0):
     '''
 
     # get data for the plot
-    old_length, old_lat, old_long, old_width, old_colors = transform_storm(storm, False, _slice)
+    old_length, old_lat, old_long, old_width, old_colors = transform_storm(storm, False, _slice, scaling)
 
     # if the storm track is too short the values above will equal 0, and no data is returned
     # in that case don't render the path but simply pass
@@ -399,15 +445,13 @@ def scale_long(x, _width):
     # therefore xpx = ((x + 120) / 90.0) * 1920
     return ((x + 120) / 90.0) * 1920
 
-def transform_storm(storm, historical=False, _slice=0):
+def transform_storm(storm, historical=False, _slice=0, scaling=1.0):
     ##################################
     # get np columns for key data ####
     ##################################
 
     if len(storm) >= 10:
-        interpolation_multiplier = 24
-
-        _chop = _slice * interpolation_multiplier
+        interpolation_multiplier = int(24 * scaling)
 
         _lat = storm.Latitude.apply(lambda x: float(x))
         _long = storm.Longitude.apply(lambda x: float(x))
@@ -426,6 +470,8 @@ def transform_storm(storm, historical=False, _slice=0):
 
         # figure out length of new arrays
         new_x = np.linspace(x.min(), x.max(), new_length)
+
+        _chop = int(_slice * new_length)
 
         # actually do the interpolation
         new_lat = interpolate.interp1d(x, _lat, kind='cubic')(new_x)
@@ -541,7 +587,7 @@ def get_data_as_yearlist(start_year, end_year):
         temp.append(years[start])
 
     # try to give back memory
-    del years
+    del years, data_na
 
     return temp
 

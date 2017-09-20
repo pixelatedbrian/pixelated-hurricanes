@@ -21,8 +21,15 @@ def get_map_data(_start=1915, _end=2016):
     # make a list of year dataframes for the range
     years = get_data_as_yearlist(_start, _end)
 
-    big_x = []
-    big_y = []
+    # sort of a constant but might need to be adjusted
+    # best range seems to be 3.0 - 7.0 but up to 10 is still good
+    grid_scale = 0.50
+    # grid_scale = 5.0
+
+    # 40 is the total latitude lines, 80 is the total longitude lines
+    grid = np.zeros((int(40 * grid_scale), int(80 * grid_scale)), dtype=np.float64)
+
+#     print grid.shape
 
     # make a temp list to hold the storm dataframes from a single year
     for _idx, year in enumerate(years):
@@ -31,99 +38,165 @@ def get_map_data(_start=1915, _end=2016):
 
         for storm in storms:
 
-            x, y = storm_heat(storm)
+            grid += storm_heat(storm, grid_scale)
 
-            big_x += x
-            big_y += y
+    print "max of grid:", grid[...].max()
 
-    x = np.array(big_x)
-    y = np.array(big_y)
+    return grid
 
-    print len(x)
+def storm_heat(storm, grid_scale=7.0):
+    '''
+    make storm track into two lists that will be turned into a heatmap
+    '''
+    # 40 is the total latitude lines, 80 is the total longitude lines
+    temp_grid = np.zeros((int(40 * grid_scale), int(80 * grid_scale)), dtype=np.float64)
+
+    if len(storm) >= 5:
+        # interpolate the storm tracks like crazy
+        interpolation_multiplier = 24 * 6 # 10 min per tick now
+
+        # get the data out of the data frame in a usable form
+        _lat = np.array(storm.Latitude.apply(lambda x: float(x)))
+        _long = np.array(storm.Longitude.apply(lambda x: float(x)))
+        # since the 'saffir_simpson_cat' column ranges from -1 to 5 add 2 to it
+        # so that the range is 1 <-> 7 which a computer understands better
+        _strengths = np.array(storm.loc[:, "saffir_simpson_cat"].apply(lambda x: int((x + 2)**2)))
+
+        clean_lat = []
+        clean_long = []
+        clean_storms = []
+        # before we expand by a large magnitude the size of the lists lets dump
+        # the values that aren't in the picture anyways
+        for idx in range(len(_lat)):
+            if 10 <= _lat[idx] <= 50 and -110 <= _long[idx] <= -30:
+                clean_lat.append(_lat[idx])
+                clean_long.append(_long[idx])
+                clean_storms.append(_strengths[idx])
+
+        # dump the memory for the obsolete lists
+        del _lat, _long, _strengths
+
+        _lat = np.array(clean_lat)
+        _long = np.array(clean_long)
+        _strengths = np.array(clean_storms)
+
+        del clean_lat, clean_long, clean_storms
+
+#         _strengths = storm.loc[:,"Wind(WMO)"].apply(lambda x: int(((x / 165.0) * 5.0)**2))
+
+        # how long is the new list going to be?
+        new_length = interpolation_multiplier * len(_lat)
+
+        # some storm tracks might never appear on our screen so length of
+        # _lat or _long might be zero, if so then break for this hurricane
+        if len(_lat) > 5 and len(_long) > 5:
 
 
-    print len(x), len(y)
+            # to help guide the interpolate method
+            x = np.arange(len(_lat))
 
-    # x: 90
-    # y: 40
+            # figure out length of new arrays
+            new_x = np.linspace(x.min(), x.max(), new_length)
 
-    print "shape", x.shape
+            # actually do the interpolation
+            # these np arrays should all be the same length
+            new_lat = interpolate.interp1d(x, _lat, kind='cubic')(new_x)
+            new_long = interpolate.interp1d(x, _long, kind='cubic')(new_x)
+            new_strs = interpolate.interp1d(x, _strengths, kind='cubic')(new_x)
 
-    temp_x = []
-    temp_y = []
+            for idx in range(new_lat.shape[0]):
+                # figure out the X/Y coordinates for the current lat/long location
+                _Y = int(50 * grid_scale) - 2 - int(new_lat[idx] * grid_scale)
+                # was a -1 adjustment because counting starts at 0, changing to -2 because
+                # storms tend to start on the right side and not hit the left side
+                # so this is a hack-ey fix for what seems like a rounding problem
+                _X = int(110 * grid_scale) - 2 + int(new_long[idx] * grid_scale)
 
-    for idx in range(x.shape[0]):
-        if 10 <= y[idx] <= 50 and -110 <= x[idx] <= -30:
-            temp_x.append(x[idx])
-            temp_y.append(y[idx])
+                temp_grid[_Y, _X] += new_strs[idx]
 
-    x = np.array(temp_x)
-    y = np.array(temp_y)
-    print
-    print
-    print "X min: {:2.1f} X max: {:2.1f}".format(x.min(), x.max())
-    print "Y min: {:2.1f} Y max: {:2.1f}".format(y.min(), y.max())
+    # keep the return at base level so even if it's a very short storm track
+    # return something, otherwise you return None and things get unhappy
+    return temp_grid
 
-    return x, y
 
-def draw_map(grid_scale, x, y, gam1=1.0, gam2=2.0, file_name=None, color_map=0):
+def draw_map(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, year=0):
 
     color_dict = {0:"inferno", 1:"plasma", 2:"magma", 3:"viridis", 4:"hot", 5:"afmhot",
                  6:"gist_heat", 7:"copper", 8:"bone", 9:"gnuplot", 10:"gnuplot2",
-                  11:"CMRmap", 12:"pink", 13:"spring", 14:"autumn_r", 15:"cool",
-                 16:"Wistia", 17:"seismic", 18:"RdGy_r", 19:"BrBG_r", 20:"RdYlGn_r",
+                  11:"CMRmap", 12:"pink", 13:"spring", 14:"autumn", 15:"cool_r",
+                 16:"Wistia_r", 17:"seismic", 18:"RdGy_r", 19:"BrBG_r", 20:"RdYlGn_r",
                  21:"PuOr", 22:"brg", 23:"hsv", 24:"cubehelix", 25:"gist_earth",
                  26:"ocean", 27:"gist_stern", 28:"gist_rainbow_r", 29:"jet",
                  30:"nipy_spectral", 31:"gist_ncar"}
 
     _cmap = color_dict[color_map]
 
-    start_time = time.time()
-
-    grid = np.zeros((int(40 * grid_scale), int(80 * grid_scale)))
-
-#     print grid.shape
-
-    for idx in range(x.shape[0]):
-        # figure out the X/Y coordinates for the current lat/long location
-        _Y = int(50 * grid_scale) - 2 - int(y[idx] * grid_scale)
-        # was a -1 adjustment because counting starts at 0, changing to -2 because
-        # storms tend to start on the right side and not hit the left side
-        # so this is a hack-ey fix for what seems like a rounding problem
-        _X = int(110 * grid_scale) - 2 + int(x[idx] * grid_scale)
-
-        grid[_Y, _X] += 1
-
-    print "total time to push list into grid: {:4.4f}".format(start_time - time.time())
-
     # establish the figure
     fig = plt.figure(figsize=(19.2, 10.8), dpi=100)
 
     ax = fig.add_subplot(111)
-    ax.set_facecolor("#000000")
     ax.clear()  # maybe clear erases some of the axis settings, not just the canvas?
     fig.subplots_adjust(0, 0, 1, 1)
-
+    ax.set_facecolor("#000000")
     ax.set_xlim(-110.0, -30.0)
     ax.set_ylim(10, 50.0)
 
-#     map_image = imread("../data/grey_blue_na_2.png")
+    # make a high peg for the grid to normalize through the years
+    # for grid size 0.5 97500 was the max
+    grid[-1, -1] = 100000
 
-#     ax.imshow(map_image, extent=[-110, -30, 10, 50], aspect="auto")
+    w, h = fig.canvas.get_width_height()
+    _heatmap = np.zeros(shape=(w, h, 4))
 
     ax.imshow(grid, norm=PowerNorm(gamma=gam1/gam2), cmap=_cmap, extent=[-110, -30, 10, 50], alpha=1.0, aspect="auto")
 
+    # paint the canvas
+    fig.canvas.draw()
+
+    # pull the paint back off the canvas into the buffer
+    heat_img = np.frombuffer(fig.canvas.buffer_rgba(), np.uint8).astype(np.int16).reshape(h, w, -1)
+
+    # print "max heat buffer:", heat_img[...,2].max()
+
+    # and black parts transparent (if they're not already)
+    heat_img[((heat_img[...,0] <= 5) & (heat_img[...,1] <= 5) & (heat_img[...,2] <= 5))] = 0
+
+    # fix the super hot square from normalizing throughout the years
+    heat_img[((heat_img[...,0] == 255) & (heat_img[...,1] == 255) & (heat_img[...,2] == 255))] = 0
+
+    # heat_img[...,0] = heat_img[..., 0] / 10.0
+    # heat_img[...,1] = heat_img[..., 1] / 10.0
+    # heat_img[...,2] = heat_img[..., 2] / 10.0
+
+    map_image = imread("../data/final_ultra_map_reg.png")
+
+    ax.imshow(map_image, extent=[-110, -30, 10, 50], aspect="auto", alpha=1.0)
+
+    fig.canvas.draw()
+
+    map_buffer = np.frombuffer(fig.canvas.buffer_rgba(), np.uint8).astype(np.int16).reshape(h, w, -1)
+
+    final_buffer = map_buffer + heat_img
+
+    final_buffer = np.clip(final_buffer, 0, 255) # clip buffer back into int8 range
+                    # wonder if some kind of exp transform
+                    # might enable hdr-like effect
+
+    ax.imshow(final_buffer.astype(np.uint8), extent=[-110, -30, 10, 50], aspect="auto", alpha=1.0)
     # write out file info so we can see how a map was made later w/ grid search
-    desc = "grid_scale: {:2.2f}\n gam1: {:2.2f}\n gam2: {:2.2f}\n _cmap: {}".format(grid_scale, gam1, gam2, _cmap)
-    ax.annotate(desc, xy=(-110 -1, 43.8), size=30, color='#D0D0D0')
+    # desc = "grid_scale: {:2.2f}\n gam1: {:2.2f}\n gam2: {:2.2f}\n _cmap: {}".format(7.0, gam1, gam2, _cmap)
+    if year != 0:
+        desc = str(year)
+    else:
+        desc = ""
+    ax.annotate(desc, xy=(-109, 48), size=40, color='#AAAAAA')
+    ax.annotate("@pixelated_brian", xy=(-109, 12), size=20, color="#BBBBBB")
 
     if file_name != None:
-        fig.savefig("../imgs/test/firewire/{}".format(file_name), pad_inches=0, transparent=True)
+        fig.savefig("../imgs/test/firebur/{}".format(file_name), pad_inches=0, transparent=True)
         plt.close("all")
 
-    del _X, _Y
-
-def run_map_grid_search(x, y, _start=0, _end=1000):
+def run_map_grid_search(grid, _start=0, _end=1000):
     '''
     Pick hyper parameters to use in a randomized grid search to try to
     find a good looking heatmap setup
@@ -133,11 +206,11 @@ def run_map_grid_search(x, y, _start=0, _end=1000):
         print "Making map [{:0>4}]/1000\r".format(rdx),
         _filename = "cmap_gsearch_num{:0>4d}.png".format(rdx)
 
-        # pick grid_scale from lognormal distribution
-        # with these values min/max of 10,000 test sample is ~0.5, 21.4
-        mu, sigma = 1.2, 0.5
-        # returns a numpy array so steal the first value in that to actually get the value
-        _grid_scale = np.random.lognormal(mu, sigma, 1)[0]
+        # # pick grid_scale from lognormal distribution
+        # # with these values min/max of 10,000 test sample is ~0.5, 21.4
+        # mu, sigma = 1.2, 0.5
+        # # returns a numpy array so steal the first value in that to actually get the value
+        # _grid_scale = np.random.lognormal(mu, sigma, 1)[0]
 
         # gamma 1: pull from a normal distribution centered around 1.0
         norm_mu, norm_sigma = 1.5, 0.5
@@ -166,7 +239,7 @@ def run_map_grid_search(x, y, _start=0, _end=1000):
         _color_map = np.random.randint(0, 32)
 
     #     draw_map(grid_scale, x, y, _xs, _ys, gam1=1.0, gam2=2.0, file_name=None, color_map=0)
-        draw_map(_grid_scale, x, y, _gam1, _gam2, color_map=_color_map, file_name=_filename)
+        draw_map(grid, _gam1, _gam2, color_map=_color_map, file_name=_filename)
 
 
 def make_historical_diagram():
@@ -215,45 +288,6 @@ def heatmap(ax, storm):
     ax.hexbin(x, y, gridsize=50, bins="log", cmap="inferno")
 
     # ax.hexbin(x, y, gridsize=50, bins='log', cmap='inferno')
-
-def storm_heat(storm):
-    '''
-    make storm track into two lists that will be turned into a heatmap
-    '''
-    _x = []
-    _y = []
-
-    if len(storm) >= 5:
-        interpolation_multiplier = 120
-
-        _lat = storm.Latitude.apply(lambda x: float(x))
-        _long = storm.Longitude.apply(lambda x: float(x))
-
-#         _strengths = storm.loc[:,"Wind(WMO)"].apply(lambda x: int(((x / 165.0) * 5.0)**2))
-
-        # since the 'saffir_simpson_cat' column ranges from -1 to 5 add 2 to it
-        # so that the range is 1 <-> 7 which a computer understands better
-        _strengths = storm.loc[:, "saffir_simpson_cat"].apply(lambda x: int((x + 2)**2))
-
-        new_length = interpolation_multiplier * len(_lat)
-
-        x = np.arange(len(_lat))
-
-        # figure out length of new arrays
-        new_x = np.linspace(x.min(), x.max(), new_length)
-
-        # actually do the interpolation
-        new_lat = interpolate.interp1d(x, _lat, kind='cubic')(new_x)
-        new_long = interpolate.interp1d(x, _long, kind='cubic')(new_x)
-        new_strs = interpolate.interp1d(x, _strengths, kind='cubic')(new_x)
-
-        for idx in range(len(new_lat)):
-            _strength = int(new_strs[idx])
-            for idy in range(_strength):
-                _x.append(new_long[idx])
-                _y.append(new_lat[idx])
-
-    return _x, _y
 
 def safsimpsonize(wind):
     '''
@@ -366,10 +400,20 @@ def get_storms_from_year(year_df):
 
 
 def main():
-    x, y, = get_map_data()
+    # grid = get_map_data()
+    #
+    # run_map_grid_search(grid, 0, 100)
 
-    run_map_grid_search(x, y, 750, 760)
+    # instead of doing a random grid search do a heatmap with a ten year moving
+    # average
+    for idx, year in enumerate(range(1915, 2016)):
+        grid = get_map_data(year-25, year)
 
+        _filename = "25yr_heat_{:0>3d}.png".format(idx)
+
+        # reverse gamma for giant grid size
+        draw_map(grid, gam1=2.25, gam2=2.0, file_name=_filename, color_map=5, year=year)
+        # draw_map(grid, gam1=2.25, gam2=5.5, file_name=_filename, color_map=5, year=year)
 
 if __name__ == "__main__":
     main()
