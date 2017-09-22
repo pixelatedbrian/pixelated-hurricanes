@@ -32,11 +32,13 @@ def main():
     long_range = (-110, -30)
 
     vid_fps = 30
+
+    frames_per_storm = 90
     # how much of a second should the video pause before going to the next year
-    lag_time = 0.33
+    lag_time = 0.15
 
     # Open an ffmpeg process
-    outf = '../imgs/test/final_hr/swarm_w_lag2.mp4'
+    outf = '../imgs/test/final_hr/swarm_long_slow.mp4'
     cmdstring = ('ffmpeg',
         '-y', '-r', str(vid_fps), # overwrite, 30fps
         '-s', '{:d}x{:d}'.format(1920, 1080), # size of image string
@@ -76,7 +78,7 @@ def main():
         storm_max_track_length = np.array([len(storm) for storm in storms]).max()
 
         # currently frames per year is based off of 1 year per second
-        _frames_per_year = int(vid_fps * (1.0 - lag_time))
+        _frames_per_year = int(frames_per_storm * (1.0 - lag_time))
 
         # each tick is 24 hours so go through until all ticks have been
         # accounted for

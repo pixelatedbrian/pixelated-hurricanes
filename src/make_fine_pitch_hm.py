@@ -24,8 +24,8 @@ def get_map_data(_start=1915, _end=2016):
 
     # sort of a constant but might need to be adjusted
     # best range seems to be 3.0 - 7.0 but up to 10 is still good
-    grid_scale = 0.50
-    # grid_scale = 5.0
+    # grid_scale = 0.50
+    grid_scale = 7.2
 
     # 40 is the total latitude lines, 80 is the total longitude lines
     grid = np.zeros((int(40 * grid_scale), int(80 * grid_scale)), dtype=np.float64)
@@ -147,7 +147,7 @@ def create_map_buffer(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, yea
 
     # make a high peg for the grid to normalize through the years
     # for grid size 0.5 97500 was the max
-    grid[-1, -1] = 100000
+    # grid[-1, -1] = 6000
 
     w, h = fig.canvas.get_width_height()
     _heatmap = np.zeros(shape=(w, h, 4))
@@ -166,7 +166,7 @@ def create_map_buffer(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, yea
     heat_img[((heat_img[...,0] <= 5) & (heat_img[...,1] <= 5) & (heat_img[...,2] <= 5))] = 0
 
     # fix the super hot square from normalizing throughout the years
-    heat_img[((heat_img[...,0] == 255) & (heat_img[...,1] == 255) & (heat_img[...,2] == 255))] = 0
+    # heat_img[((heat_img[...,0] == 255) & (heat_img[...,1] == 255) & (heat_img[...,2] == 255))] = 0
 
     # heat_img[...,0] = heat_img[..., 0] / 10.0
     # heat_img[...,1] = heat_img[..., 1] / 10.0
@@ -234,7 +234,7 @@ def draw_map(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, year=0):
 
     # make a high peg for the grid to normalize through the years
     # for grid size 0.5 97500 was the max
-    grid[-1, -1] = 100000
+    # grid[-1, -1] = 100000
 
     w, h = fig.canvas.get_width_height()
     _heatmap = np.zeros(shape=(w, h, 4))
@@ -253,7 +253,7 @@ def draw_map(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, year=0):
     heat_img[((heat_img[...,0] <= 5) & (heat_img[...,1] <= 5) & (heat_img[...,2] <= 5))] = 0
 
     # fix the super hot square from normalizing throughout the years
-    heat_img[((heat_img[...,0] == 255) & (heat_img[...,1] == 255) & (heat_img[...,2] == 255))] = 0
+    # heat_img[((heat_img[...,0] == 255) & (heat_img[...,1] == 255) & (heat_img[...,2] == 255))] = 0
 
     # heat_img[...,0] = heat_img[..., 0] / 10.0
     # heat_img[...,1] = heat_img[..., 1] / 10.0
@@ -494,7 +494,8 @@ def main():
 
     vid_fps = 30
 
-    ffm = FFMWrapper("../imgs/test/more_heat/heat_interpolated.mp4", _vid_fps=vid_fps)
+    _file = "../imgs/test/more_heat/fine_heat_interpolated_cu5.mp4"
+    ffm = FFMWrapper(_file, _vid_fps=vid_fps)
     # grid = get_map_data()
     #
     # run_map_grid_search(grid, 0, 100)
@@ -514,27 +515,35 @@ def main():
         # if the frame is the first one then start with a black frame
 
         # should be 25 years but 5 for faster troubleshooting
-        grid = get_map_data(year-25, year)
+        grid = get_map_data(year-idx, year)
 
-        # _filename = "25yr_heat_{:0>3d}.png".format(idx)s
+        # _filename = "25yr_heat_{:0>3d}.png".format(idx)
 
         # reverse gamma for giant grid size
-        new_buffer, desc = create_map_buffer(grid, gam1=2.0, gam2=2.25, color_map=5, year=year)
+        # new_buffer, desc = create_map_buffer(grid, gam1=2.0, gam2=2.25, color_map=5, year=year)
+        # cmap 5, scale 3.27, gam1:1.7/gam2:2.7 is a good one (afm14)
+        new_buffer, desc = create_map_buffer(grid, gam1=0.45, gam2=3.7, color_map=7, year=year)
         # draw_map(grid, gam1=2.25, gam2=5.5, file_name=_filename, color_map=5, year=year)
 
-        ffm.cross_fade(old_buffer, new_buffer, interp, desc)
+        if idx == 0:
+
+            ffm.cross_fade(old_buffer, new_buffer, int(vid_fps * 0.5), desc)
+        else:
+            ffm.cross_fade(old_buffer, new_buffer, interp, desc)
 
         # use copy to get a distinct copy that won't update each time new_buffer
         # is modified
         old_buffer = new_buffer.copy()
 
     # fade video out
-    ffm.cross_fade(old_buffer,old_buffer, vid_fps * 2, desc)
+    ffm.cross_fade(old_buffer, old_buffer, vid_fps * 2, desc)
 
     # fade video out
-    ffm.cross_fade(old_buffer, black_buffer, vid_fps * 2, "")
+    ffm.cross_fade(old_buffer, black_buffer, int(vid_fps * 0.5), "")
 
     ffm.close()
+
+    print "\n\n\nfinished writing file: {}".format(_file)
 
 if __name__ == "__main__":
     main()
