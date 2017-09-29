@@ -242,6 +242,8 @@ def create_map_buffer(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, yea
     '''
     Render a frame of a heatmap from the grid provided then return it as a buffer
     in order to be processed and added to a video
+
+    returns 2d np array containing the new buffer for the map
     '''
 
     color_dict = {0:"inferno", 1:"plasma", 2:"magma", 3:"viridis", 4:"hot", 5:"afmhot",
@@ -650,19 +652,19 @@ def main():
 
         if idy == 1:
 
-            ffm.cross_fade(old_buffer, new_buffer, int(vid_fps * 0.5), desc)
+            ffm.cross_fade_frames(old_buffer, new_buffer, int(vid_fps * 0.5), desc)
         else:
-            ffm.cross_fade(old_buffer, new_buffer, interp, desc)
+            ffm.cross_fade_frames(old_buffer, new_buffer, interp, desc)
 
         # use copy to get a distinct copy that won't update each time new_buffer
         # is modified
         old_buffer = new_buffer.copy()
 
     # fade video out
-    ffm.cross_fade(old_buffer, old_buffer, vid_fps * 2, desc)
+    ffm.cross_fade_frames(old_buffer, old_buffer, vid_fps * 2, desc)
 
     # fade video out
-    ffm.cross_fade(old_buffer, black_buffer, int(vid_fps * 0.5), "")
+    ffm.cross_fade_frames(old_buffer, black_buffer, int(vid_fps * 0.5), "")
 
     ffm.close()
 

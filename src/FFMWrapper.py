@@ -32,7 +32,7 @@ class FFMWrapper(object):
         # establish subprocess connection
         self.process = subprocess.Popen(self.cmdstring, stdin=subprocess.PIPE)
 
-    def add_frame(self, _buffer):
+    def write_frame(self, _buffer):
         '''
         Appends a frame to the video. The frame MUST be an ARGB string!
         Example: _exit_buffer = fig.canvas.tostring_argb()
@@ -40,7 +40,33 @@ class FFMWrapper(object):
         # write to pipe
         self.process.stdin.write(_buffer)
 
-    def cross_fade(self, start_buffer, end_buffer, num_frames, desc):
+    def add_frame(self, _buffer, desc=""):
+        '''
+        Add the provided _buffer to the video with the provided desc
+        '''
+        # make the plot for the frame
+        fig, ax = plt.subplots(figsize=(self.width/100.0, self.height/100.0), dpi=100)
+        fig.subplots_adjust(0, 0, 1, 1)
+
+        # fix any alpha weirdness by clipping final_frame then setting alpha
+        # to max
+        final_frame = np.clip(_buffer, 0, 255)
+
+        # draw frame on canvas
+        ax.clear()
+        ax.set_facecolor("#000000")
+        ax.set_xlim(-110.0, -30.0)
+        ax.set_ylim(10, 50.0)
+        ax.annotate(desc, xy=(-109, 48), size=40, color='#AAAAAA')
+
+        ax.imshow(final_frame.astype(np.uint8), aspect="auto", alpha=1.0, extent=[-110, -30, 10, 50])
+        # fig.savefig("../imgs/test/more_heat/{}".format("test.png"), pad_inches=0, transparent=True)
+        fig.canvas.draw()
+
+        # write the frame:
+        self.write_frame(fig.canvas.tostring_argb())
+
+    def cross_fade_frames(self, start_buffer, end_buffer, num_frames, desc):
         '''
         Fade the two buffers into each other.
         '''
@@ -88,7 +114,7 @@ class FFMWrapper(object):
             fig.canvas.draw()
 
             # write the frame:
-            self.add_frame(fig.canvas.tostring_argb())
+            self.write_frame(fig.canvas.tostring_argb())
 
         plt.close("all")
 
