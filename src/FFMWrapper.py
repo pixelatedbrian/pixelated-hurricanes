@@ -20,6 +20,8 @@ class FFMWrapper(object):
         self.width = _width
         self.height = _height
 
+        self.frame_cache = []
+
         # a more generalized wrapper would let all of this other stuff be
         # specified too but not needed for mvp
         self.cmdstring = ('ffmpeg',
@@ -31,6 +33,25 @@ class FFMWrapper(object):
 
         # establish subprocess connection
         self.process = subprocess.Popen(self.cmdstring, stdin=subprocess.PIPE)
+
+    def add_to_cache(self, _buffer):
+        '''
+        Instead of writing after every single frame is created, add to a cache
+        and write out the cache every 30 frames (or whatever the fps is set to)
+        '''
+        self.frame_cache.append(_buffer)
+
+        if len(self.frame_cache) > 30:
+            self.write_cache()
+
+    def write_cache(self):
+        '''
+        Append the frames in the frame cache to the video
+        '''
+        for idx in range(len(self.frame_cache)):
+            temp_buffer = self.frame_cache.pop(0)
+
+            self.write_frame(temp_buffer)
 
     def write_frame(self, _buffer):
         '''
@@ -64,7 +85,7 @@ class FFMWrapper(object):
         fig.canvas.draw()
 
         # write the frame:
-        self.write_frame(fig.canvas.tostring_argb())
+        self.add_to_cache(fig.canvas.tostring_argb())
 
     def cross_fade_frames(self, start_buffer, end_buffer, num_frames, desc):
         '''
@@ -126,5 +147,9 @@ class FFMWrapper(object):
         '''
         Close out the write to the process
         '''
+        # make sure the frame cache is empty
+        if len(self.frame_cache) != 0:
+            self.write_cache()
+
         # try to write the video
         self.process.communicate()

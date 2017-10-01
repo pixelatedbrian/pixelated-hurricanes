@@ -286,10 +286,73 @@ def return_activated_storm_area(storm_slice, temp_grid, grid_scale, after_glow=0
             # so this is a hack-ey fix for what seems like a rounding problem
             _X = int(110 * grid_scale) - 2 + int(storm_slice[idx, 1] * grid_scale)
 
-            if temp_grid[_Y, _X] < active[idx]:   # only replace if the new strength is higher
-                temp_grid[_Y, _X] = active[idx]
+            power = active[idx]
+
+
+            if temp_grid[_Y, _X] < power:   # only replace if the new strength is higher
+                temp_grid[_Y, _X] = power
+
+                if power == 255:
+                    temp_grid = fuzz_x(temp_grid, _X, _Y, 1, 180)
+                    temp_grid = fuzz_x(temp_grid, _X, _Y, 2, 90)
+                    # temp_grid[_Y + 1, _X + 1] = 90
+                    # temp_grid[_Y + 1, _X + -1] = 90
+                    # temp_grid[_Y + -1, _X + 1] = 90
+                    # temp_grid[_Y + -1, _X + -1] = 90
+
+                    temp_grid = fuzz_plus(temp_grid, _X, _Y, 1, 220)
+                    temp_grid = fuzz_plus(temp_grid, _X, _Y, 2, 130)
+
+                    # temp_grid[_Y + 1, _X] = 220
+                    # temp_grid[_Y + -1, _X] = 220
+                    # temp_grid[_Y, _X + 1] = 220
+                    # temp_grid[_Y, _X -1] = 220
+
+                if power > 32:
+                    temp_grid = fuzz_x(temp_grid, _X, _Y, 1, int(power/2.0))
+                    temp_grid = fuzz_plus(temp_grid, _X, _Y, 1, int(power/2.0))
+                    temp_grid = fuzz_x(temp_grid, _X, _Y, 2, int(power/4.0))
+                    temp_grid = fuzz_plus(temp_grid, _X, _Y, 2, int(power/4.0))
 
     return temp_grid
+
+def fuzz_x(grid, x, y, fd, _pow):
+    '''
+    edit passed in grid at x, y with pow
+    '''
+    if 0 <= y + fd < grid.shape[0] and 0 <= x + fd < grid.shape[1] and 0 <= y - fd < grid.shape[0] and 0 <= x - fd < grid.shape[1]:
+        if grid[y + fd, x + fd] < _pow:
+            grid[y + fd, x + fd] = _pow
+
+        if grid[y + fd, x - fd] < _pow:
+            grid[y + fd, x - fd] = _pow
+
+        if grid[y - fd, x + fd] < _pow:
+            grid[y - fd, x + fd] = _pow
+
+        if grid[y - fd, x - fd] < _pow:
+            grid[y - fd, x - fd] = _pow
+
+    return grid
+
+def fuzz_plus(grid, x, y, fd, _pow):
+    '''
+    edit passed in grid at x, y with pow
+    '''
+    if 0 <= y + fd < grid.shape[0] and 0 <= x + fd < grid.shape[1] and 0 <= y - fd < grid.shape[0] and 0 <= x - fd < grid.shape[1]:
+        if grid[y + fd, x ] < _pow:
+            grid[y + fd, x ] = _pow
+
+        if grid[y - fd, x ] < _pow:
+            grid[y - fd, x ] = _pow
+
+        if grid[y, x + fd] < _pow:
+            grid[y, x + fd] = _pow
+
+        if grid[y, x - fd] < _pow:
+            grid[y, x - fd] = _pow
+
+    return grid
 
 def create_map_buffer(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, year=0):
     '''
@@ -376,8 +439,8 @@ def create_map_buffer(grid, gam1=1.0, gam2=2.0, file_name=None, color_map=0, yea
 
     final_buffer = np.frombuffer(fig.canvas.buffer_rgba(), np.uint8).astype(np.int16).reshape(h, w, -1)
 
-    print "max create_map_buffer:", final_buffer[...,1].max()
-    print "create_map_buffer.shape", final_buffer.shape
+    # print "max create_map_buffer:", final_buffer[...,1].max()
+    # print "create_map_buffer.shape", final_buffer.shape
 
     plt.close("all")
 
@@ -398,7 +461,7 @@ def run_shockwave():
 
     vid_fps = 30
 
-    _file = "../imgs/test/ouroboros/ouroboros04.mp4"
+    _file = "../imgs/test/ouroboros/ouroboros16.mp4"
     ffm = FFMWrapper(_file, _vid_fps=vid_fps)
 
     # #video width, height:
@@ -406,9 +469,10 @@ def run_shockwave():
 
     num_storms = len(storm_data)  # seems like 1314
 
-    grid_scale = 7.0
+    grid_scale = 20
 
-    INTERVALS = 87.72 * 0.333333 # arithmetically this seems to give each storm 5 seconds worth of frames
+    INTERVALS = 87.72 * 0.1 # arithmetically this seems to give each storm 5 seconds worth of frames
+    # INTERVALS = 87.72 * 1.0 # arithmetically this seems to give each storm 5 seconds worth of frames
 
     # establish the inital grid and source of truth:
     core_grid = make_initial_railyard(storm_data, grid_scale)
@@ -428,15 +492,10 @@ def run_shockwave():
     # incremental step forward is 1 / (num_frames / num_intervals) * frame
     step = 1.0 / (1710 / INTERVALS)
 
-    # oddly stepping forward through frames appeared to go backwards through the lists
-    # some kind of subtle bug but here's a hack to fix it
-    # TODO: fix the subtle bug
-    for frame in range(1710, 0, -1): # 1710 is 55 seconds at 30 frames/sec
+    for frame in range(1710): # 1710 is 55 seconds at 30 frames/sec
 
-        if frame < 1150:
-            break
-
-        worm_tail = 0.0
+        # if frame < 1150:
+        #     break
 
         frame_grid = core_grid.copy() # make it a copy so the original is not modified
 
@@ -446,6 +505,8 @@ def run_shockwave():
             worm_head -= INTERVALS
 
     #     print worm_head, worm_tail
+
+        magic_mult = 9.0
 
         # starting_storm = worm_head * worm_length
         starting_storm = worm_head * worm_length
@@ -457,15 +518,35 @@ def run_shockwave():
 
         # do something a bit different if worm_head < 17 because need to do the trailing part too
 
-        for segment in range(int_worm_length * 3 -1):
+        # if the current index is higher than the end of the storm_data array
+        # then move the pointer to the start of the storm_data array
+        if starting_storm_index >= num_storms:
+            starting_storm_index -= num_storms
 
-            active_index = starting_storm_index + segment # first one is the front of the worm
+        # for segment in range(int(int_worm_length * magic_mult -1)):
+        for segment in range(int(int_worm_length * magic_mult)):
 
+            active_index = starting_storm_index - segment # first one is the front of the worm
+
+            # because we can wrap around it is possible that active_index is negative
+            # which means that it really needs to be back at the end of the list
+            # is fixing the overloop this easy?
+            if active_index < 0:
+                # since it's below 0 add active_index to the length instead of
+                # subtracting
+                active_index = num_storms + active_index
+
+            # if active_index >= len(storm_data):
+            #     active_index -= len(storm_data)
+            #     # print "weird, not expected. active_index is > than len(storm_data)"
+
+            # the sneaky bug was probably because active index is positive
+            # when each time segment increases active_index should be smaller
             _len = len(storm_data[active_index])
 
-            _slice = int(1.0/ worm_length * _len * 3.0)
+            _slice = int(1.0/ worm_length * _len * magic_mult)
 
-            start_slice = int(_slice * (segment / 3.0))
+            start_slice = int(_slice * (segment / magic_mult))
             end_slice = start_slice + _slice
 
 #             print "len: {:4d} start: {:4d} end: {:4d}".format(_len, start_slice, end_slice)
@@ -473,11 +554,15 @@ def run_shockwave():
             frame_grid = return_activated_storm_area(storm_data[active_index][start_slice:end_slice,:],
                                                      frame_grid, grid_scale)
 
+
         # ideally come back and light the tiny trailing edge with a bit of afterglow
         # not the whole slice but like the trailing_edge * slice_length of the active area
 
         # create map buffer
-        new_buffer, _ = create_map_buffer(frame_grid, gam1=1.5, gam2=2.75, color_map=7)
+        # for cmap 0: gam 1.5/2.5 is good
+        # cmap 0 actually looks really cool with comet tails shading
+        # for cmap 7: copper seems good at 1.5/3.25
+        new_buffer, _ = create_map_buffer(frame_grid, gam1=1.5, gam2=3.25, color_map=7)
 
 #         if frame == 1710:
 #             ffm.cross_fade_frames(old_buffer, new_buffer, int(vid_fps * 0.5), "")
