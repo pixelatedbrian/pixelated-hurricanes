@@ -16,7 +16,7 @@ import time
 
 from FFMWrapper import FFMWrapper
 
-def get_map_data(_start=1915, _end=2016):
+def get_map_data(_start=1915, _end=2016, min_length=5):
     # establish the range of years
     # ^ moved to function parameter
 
@@ -30,7 +30,7 @@ def get_map_data(_start=1915, _end=2016):
     # make a temp list to hold the storm dataframes from a single year
     for _idx, year in enumerate(years):
 
-        storms = get_storms_from_year(year)
+        storms = get_storms_from_year(year, min_length)
 
         tome_of_storms += storms
 
@@ -100,7 +100,7 @@ def load_hurricane_data(_path="../data/allstorms.csv"):
 
     return data_na
 
-def get_storms_from_year(year_df):
+def get_storms_from_year(year_df, min_length=5):
     '''
     year_df is the dataframe with a year's data
 
@@ -114,7 +114,7 @@ def get_storms_from_year(year_df):
 
         # make a temp storm since it's needed more than once
         temp_storm = year_df[year_df.loc[:, "Serial_Num"] == storm]
-        if temp_storm.count()[0] >= 5:
+        if temp_storm.count()[0] >= min_length:
             storms.append(temp_storm)
 
         del temp_storm
@@ -294,7 +294,7 @@ def return_activated_storm_area(storm_slice, temp_grid, grid_scale, after_glow=0
 
                 if power == 255:
                     temp_grid = fuzz_x(temp_grid, _X, _Y, 1, 180)
-                    temp_grid = fuzz_x(temp_grid, _X, _Y, 2, 90)
+                    # temp_grid = fuzz_x(temp_grid, _X, _Y, 2, 90)
                     # temp_grid[_Y + 1, _X + 1] = 90
                     # temp_grid[_Y + 1, _X + -1] = 90
                     # temp_grid[_Y + -1, _X + 1] = 90
@@ -308,9 +308,11 @@ def return_activated_storm_area(storm_slice, temp_grid, grid_scale, after_glow=0
                     # temp_grid[_Y, _X + 1] = 220
                     # temp_grid[_Y, _X -1] = 220
 
-                if power > 32:
+                if 32 < power < 252:
                     temp_grid = fuzz_x(temp_grid, _X, _Y, 1, int(power/2.0))
                     temp_grid = fuzz_plus(temp_grid, _X, _Y, 1, int(power/2.0))
+
+                if 96 < power < 252:
                     temp_grid = fuzz_x(temp_grid, _X, _Y, 2, int(power/4.0))
                     temp_grid = fuzz_plus(temp_grid, _X, _Y, 2, int(power/4.0))
 
@@ -451,7 +453,7 @@ def run_shockwave():
     '''
     Effectively a main() function that contains all of the execution steps
     '''
-    book_of_storms = get_map_data()
+    book_of_storms = get_map_data(min_length=30)
 
     storm_data = make_storm_data(book_of_storms)
 
@@ -461,7 +463,7 @@ def run_shockwave():
 
     vid_fps = 30
 
-    _file = "../imgs/test/ouroboros/ouroboros16.mp4"
+    _file = "../imgs/test/ouroboros/ouroboros30.mp4"
     ffm = FFMWrapper(_file, _vid_fps=vid_fps)
 
     # #video width, height:
@@ -506,7 +508,7 @@ def run_shockwave():
 
     #     print worm_head, worm_tail
 
-        magic_mult = 9.0
+        magic_mult = 5.0
 
         # starting_storm = worm_head * worm_length
         starting_storm = worm_head * worm_length
@@ -528,6 +530,8 @@ def run_shockwave():
 
             active_index = starting_storm_index - segment # first one is the front of the worm
 
+            # print "a_i", active_index, num_storms
+
             # because we can wrap around it is possible that active_index is negative
             # which means that it really needs to be back at the end of the list
             # is fixing the overloop this easy?
@@ -536,6 +540,7 @@ def run_shockwave():
                 # subtracting
                 active_index = num_storms + active_index
 
+            # print "a_i", active_index
             # if active_index >= len(storm_data):
             #     active_index -= len(storm_data)
             #     # print "weird, not expected. active_index is > than len(storm_data)"
@@ -562,6 +567,7 @@ def run_shockwave():
         # for cmap 0: gam 1.5/2.5 is good
         # cmap 0 actually looks really cool with comet tails shading
         # for cmap 7: copper seems good at 1.5/3.25
+        # new_buffer, _ = create_map_buffer(frame_grid, gam1=1.5, gam2=2.85, color_map=5)
         new_buffer, _ = create_map_buffer(frame_grid, gam1=1.5, gam2=3.25, color_map=7)
 
 #         if frame == 1710:
