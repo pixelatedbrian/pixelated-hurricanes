@@ -11,4 +11,4 @@ That ended up being this kind of thought process:
 * The damage formula was: (storm category + 2)^2   This accounted for tropical storms and tropical depressions. The square is because the Saffir-Simpson Hurricane Categories are a roughly logarithmic scale.  Also, according to the Saffir-Simpson scale, wind is the primary source of damage from hurricanes and air pressure increases as the square of velocity.
 
 That lead to this gif:
-[100 Years of Hurricane Intensities](<div style='position:relative;padding-bottom:57%'><iframe src='https://gfycat.com/ifr/SecondhandShrillHamster' frameborder='0' scrolling='no' width='100%' height='100%' style='position:absolute;top:0;left:0;' allowfullscreen></iframe></div>)
+[100 Years of Hurricane Intensities](https://gfycat.com/SecondhandShrillHamster)
