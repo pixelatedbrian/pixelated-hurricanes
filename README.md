@@ -14,7 +14,7 @@ That ended up being this kind of thought process:
 * At each time interval apply some 'damage' to the lat/long that the storm is currently located at.
 * The damage formula was: (storm category + 2)^2   This accounted for tropical storms and tropical depressions. The square is because the Saffir-Simpson Hurricane Categories are a roughly logarithmic scale.  Also, according to the Saffir-Simpson scale, wind is the primary source of damage from hurricanes and air pressure increases as the square of velocity.
 
-[Gifs of all mentioned videos here]()
+[Gifs of all mentioned videos here](https://pixelatedbrian.github.io/hurricanes.html)
 
 That lead to this gif:
 [100 Years of Hurricane Intensities](https://www.youtube.com/watch?v=e71EJGwv8yE)
